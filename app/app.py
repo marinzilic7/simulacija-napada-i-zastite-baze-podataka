@@ -5,6 +5,7 @@ import MySQLdb
 from config import Config
 import os 
 import time
+from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -45,6 +46,12 @@ def register_user():
     email = request.form['email']
     password = request.form['password']
 
+    # Hashiranje lozinke
+    # Hashiranje lozinke pomoću funkcije generate_password_hash iz modula werkzeug.security.
+    # Hashirana lozinka se dodaje u bazu umjesto prave lozinke. 
+  
+    hashed_password = generate_password_hash(password, method='pbkdf2:sha256', salt_length=8)
+
     connection = get_db_connection()
     cursor = connection.cursor()
 
@@ -54,7 +61,7 @@ def register_user():
         #Metoda za zaštitu baza podataka koja sprječava napade unošenjem malicioznih SQL kodova u upite.
         #Ovdje %s su mjesta rezervirana za parametre koje će cursor.execute automatski zamijeniti s vrijednostima (first_name, last_name, email, password).                                                                                               
         cursor.execute("INSERT INTO users (firstName, lastName, email, password) VALUES (%s, %s, %s, %s)", 
-                       (first_name, last_name, email, password))
+                       (first_name, last_name, email, hashed_password))
         connection.commit()
         flash('Korisnik uspješno registriran', 'success')
     except Exception as e:
@@ -111,27 +118,21 @@ def log_user_safe():
     ip_address = request.remote_addr
     current_time = time.time()
 
-
-    #Bruce Force zastita
-    #Provjerava je li IP adresa korisnika prisutna u failed_login_attempts.
-    #Ako jest, provjerava broj pokušaja i vrijeme posljednjeg pokušaja. Ako je broj pokušaja >= 5 i manje od jedne minute prošlo od posljednjeg pokušaja, prikazuje poruku o blokadi.
-
-
+    # Zaštita od brute force napada
     if ip_address in failed_login_attempts:
         attempts, last_attempt_time = failed_login_attempts[ip_address]
         if attempts >= 5 and (current_time - last_attempt_time) < 60:
-            # Izračunaj preostalo vrijeme
             counter = 60 - (current_time - last_attempt_time)
             flash(f'Previše neuspješnih pokušaja prijave. Pokušajte ponovno za {counter:.0f} sekundi.', 'danger')
             return redirect(url_for('login'))
 
     connection = get_db_connection()
     cursor = connection.cursor()
-    query = "SELECT * FROM users WHERE firstName=%s AND password=%s"
-    cursor.execute(query, (first_name, password))
+    query = "SELECT * FROM users WHERE firstName=%s"
+    cursor.execute(query, (first_name,))
     user = cursor.fetchone()
 
-    if user:
+    if user and check_password_hash(user[4], password):  # Provjera lozinke s hashiranjem
         session['user_name'] = user[1]  # Pretpostavlja da je `firstName` na indeksu 1
         session['user_id'] = user[0]    # Pretpostavlja da je `ID_user` na indeksu 0
         failed_login_attempts.pop(ip_address, None)
@@ -146,7 +147,6 @@ def log_user_safe():
         flash('Neuspješna prijava', 'danger')
         connection.close()
         return redirect(url_for('login'))
-
 @app.route('/logout')
 def logout():
     # Uklanja korisničke podatke iz sesije
@@ -157,4 +157,4 @@ def logout():
     return redirect(url_for('index'))
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', debug=True)
+    app.run(host='0.0.0.0', port=5000, debug=True)

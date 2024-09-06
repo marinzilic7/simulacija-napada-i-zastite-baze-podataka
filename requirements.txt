@@ -3,3 +3,5 @@ flask_wtf
 PyMySQL
 dogpile.cache
 cryptography
+werkzeug
+mysqlclient
