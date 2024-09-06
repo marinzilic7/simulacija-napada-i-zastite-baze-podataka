@@ -1,0 +1,30 @@
+version: "3.7"
+services:
+  projekt:
+    build: .
+    container_name: projekt
+    ports:
+      - "5001:5001"
+    depends_on:
+      - mysql
+      
+    networks:
+      - bpnet
+    restart: always
+  mysql:
+    image: mysql
+    container_name: mysql
+    environment:
+      - MYSQL_DATABASE=projekt
+      - MYSQL_USER=projekt
+      - MYSQL_PASSWORD=projekt123
+      - MYSQL_ROOT_PASSWORD=projekt123
+    volumes:
+      - mysql:/var/lib/mysql
+    networks:
+      - bpnet
+volumes:
+  mysql:
+networks:
+  bpnet:
+    driver: bridge
