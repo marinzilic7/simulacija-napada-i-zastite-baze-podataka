@@ -4,12 +4,19 @@ from flask import Flask, render_template, request, redirect, url_for, flash,sess
 import MySQLdb
 from config import Config
 import os 
+
 import time
+
+# Werkzeug: Modul koji pruža funkcionalnosti za sigurnost, uključujući hashiranje lozinke.
 from werkzeug.security import generate_password_hash, check_password_hash
+
 
 app = Flask(__name__)
 app.config.from_object(Config)
 app.secret_key = 'ovo-je-moj-tajni-kljuc'
+
+
+
 
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -29,6 +36,7 @@ def get_db_connection():
 
 @app.route('/')
 def index():
+    
     return render_template('index.html')
 
 @app.route('/login')
@@ -41,6 +49,7 @@ def home():
 
 @app.route('/registerUser', methods=['POST'])
 def register_user():
+    
     first_name = request.form['firstName']
     last_name = request.form['lastName']
     email = request.form['email']
@@ -51,7 +60,7 @@ def register_user():
     # Hashirana lozinka se dodaje u bazu umjesto prave lozinke. 
   
     hashed_password = generate_password_hash(password, method='pbkdf2:sha256', salt_length=8)
-
+    print(f"Generirani hash: {hashed_password}")
     connection = get_db_connection()
     cursor = connection.cursor()
 
@@ -69,7 +78,7 @@ def register_user():
     finally:
         connection.close()
 
-    return redirect(url_for('index'))
+    return render_template('index.html')
 
 
 # Ovaj kod ispod za prijavu korisnika je ranjiv na SQL injekcije, testiranje SQL injekcije pomocu koje brišemo tablicu users; 
@@ -132,9 +141,19 @@ def log_user_safe():
     cursor.execute(query, (first_name,))
     user = cursor.fetchone()
 
-    if user and check_password_hash(user[4], password):  # Provjera lozinke s hashiranjem
-        session['user_name'] = user[1]  # Pretpostavlja da je `firstName` na indeksu 1
-        session['user_id'] = user[0]    # Pretpostavlja da je `ID_user` na indeksu 0
+    print(f"Pohranjeni hash lozinke u bazi: {user[4]}")
+    print(f"Unesena lozinka: {password}")
+    print(user)
+
+    if user and check_password_hash(user[4], password):  
+
+        #Session Fixation napadi omogućuju napadaču da preuzme sesiju korisnika. 
+        #Ovo se može dogoditi ako napadač uspije prisiliti korisnika da koristi sesiju koju je napadač prethodno stvorio.
+        #Ako se session.clear() koristi nakon što korisnik uspješno prijavi, to pomaže u sprječavanju napada poput Session Fixation. Napadač može pokušati prisiliti korisnika da koristi sesiju koju je napadač već stvorio. 
+        #Brisanjem svih prethodnih sesijskih podataka, korisnička sesija se "očisti" i novi sesijski identifikator se koristi za autentifikaciju.
+        session.clear()
+        session['user_name'] = user[1]  
+        session['user_id'] = user[0]    
         failed_login_attempts.pop(ip_address, None)
         connection.close()
         return redirect(url_for('home'))
